@@ -135,13 +135,13 @@ export class WorkOrderService {
 
   static async getWorkOrderMetrics(refKey:string): Promise<any> {
     const queries = [
-      // Total Work Orders
+      // Tatal
       `SELECT COUNT() FROM WorkOrder  WHERE Vendor_Name__r.ERP_Customer_ID__c='${refKey}'  `,
-      // Open Work Orders
+      // Waiting Install
       `SELECT COUNT() FROM WorkOrder WHERE Vendor_Name__r.ERP_Customer_ID__c='${refKey}' AND Status='Done (Operation)'  `,
-      // High Priority Work Orders
+      // Completed
       `SELECT COUNT() FROM WorkOrder WHERE Vendor_Name__r.ERP_Customer_ID__c='${refKey}' AND  ( Status='Pending' OR Status='Reception'  ) `,
-      // Closed
+      // Credit Review
       `SELECT COUNT() FROM WorkOrder WHERE Vendor_Name__r.ERP_Customer_ID__c='${refKey}' AND Status='Closed'  `
     ];
 
