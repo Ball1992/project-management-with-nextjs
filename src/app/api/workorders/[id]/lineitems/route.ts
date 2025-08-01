@@ -22,7 +22,7 @@ export async function GET(
     const lineItems = await WorkOrderService.getWorkOrderLineItems(id);
     return NextResponse.json({ success: true, data: lineItems });
   } catch (error: any) {
-    console.error('WorkOrder LineItem API Error:', error);
+    // console.error('WorkOrder LineItem API Error:', error);
     return NextResponse.json(
       { 
         success: false, 
@@ -66,7 +66,7 @@ export async function POST(
       );
     }
   } catch (error: any) {
-    console.error('WorkOrder LineItem API Error:', error);
+    // console.error('WorkOrder LineItem API Error:', error);
     return NextResponse.json(
       { 
         success: false, 

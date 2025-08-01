@@ -97,7 +97,7 @@ export const useWorkOrders = (initialParams?: QueryParams): UseWorkOrdersReturn 
         setMetrics(response.data);
       }
     } catch (err: any) {
-      console.error('Failed to fetch metrics:', err.message);
+      // console.error('Failed to fetch metrics:', err.message);
     }
   }, []);
 

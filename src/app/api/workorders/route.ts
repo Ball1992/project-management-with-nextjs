@@ -3,6 +3,7 @@ import { WorkOrderService } from '../../../services/WorkOrderService';
 import { transformWorkOrdersToCustom, filterWorkOrdersForUser, transformCustomToWorkOrder } from '../../../helpers/helpersWorkOrders';
 import { QueryParams } from '../../../types/salesforce';
 import { WorkOrderCustom } from '../../../types/workorderCustom';
+import { MemberService } from '@/services/MemberService';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,17 +14,37 @@ export async function GET(request: NextRequest) {
       offset: searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : 0,
       orderBy: searchParams.get('orderBy') || 'LastModifiedDate DESC',
       where: searchParams.get('where') || undefined,
+      id: searchParams.get('id') || '',
+      jwtToken: searchParams.get('jwtToken') || '',
     };
 
     const userRole = searchParams.get('userRole') || '';
     const refKey = searchParams.get('refKey') || '';
-
+     console.log('queryParams')
+    console.log(queryParams)
     // Get work orders from Salesforce
     const salesforceResponse = await WorkOrderService.getWorkOrders(queryParams);
     
     // Transform to custom format
     const transformedWorkOrders = transformWorkOrdersToCustom(salesforceResponse.records);
     
+    
+    if(queryParams.id!=='' && queryParams.jwtToken !=undefined && transformedWorkOrders[0].doNo!=='N/A'){
+       // Get work orders from Salesforce
+      const doNo = transformedWorkOrders[0].doNo!=='N/A'? transformedWorkOrders[0].doNo :''
+      const salesforceResponseDO = await MemberService.GetDOData(doNo,queryParams.jwtToken);
+      
+      if(salesforceResponseDO!==undefined && salesforceResponseDO.length>0){
+          const [day, month, year] = salesforceResponseDO[0].deliveryDate.split('/').map(Number)
+          transformedWorkOrders[0].doDate =new Date(year, month - 1, day)
+          transformedWorkOrders[0].doNo =salesforceResponseDO[0].doNum
+          transformedWorkOrders[0].landNo =salesforceResponseDO[0].landNo
+          transformedWorkOrders[0].models = salesforceResponseDO
+        
+      }
+      
+    }
+
     // Filter based on user role
     const filteredWorkOrders = filterWorkOrdersForUser(transformedWorkOrders, userRole, refKey);
 
@@ -35,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: response });
   } catch (error: any) {
-    console.error('WorkOrder API Error:', error);
+    // console.error('WorkOrder API Error:', error);
     return NextResponse.json(
       { 
         success: false, 
@@ -69,7 +90,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error: any) {
-    console.error('WorkOrder API Error:', error);
+    // console.error('WorkOrder API Error:', error);
     return NextResponse.json(
       { 
         success: false, 

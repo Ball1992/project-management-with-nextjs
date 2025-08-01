@@ -12,7 +12,7 @@ import {
   Divider
 } from '@mui/material'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
-import { authenticateUser, generateToken, storeUser, type LoginCredentials } from '@/lib/auth'
+import { storeUser, type LoginCredentials } from '@/lib/auth'
 
 interface LoginFormProps {
   onLoginSuccess: () => void
@@ -32,16 +32,26 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
     setError('')
 
     try {
-      const user = await authenticateUser(credentials)
-      if (user) {
-        const token = generateToken(user)
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        const { user, token } = result.data
         storeUser(user, token)
         onLoginSuccess()
       } else {
-        setError('Invalid username or password')
+        setError(result.error || 'Invalid username or password')
       }
     } catch (err) {
-      setError('Login failed. Please try again.')
+      // console.error('Login error:', err)
+      setError('Login failed. Please check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -153,52 +163,6 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
         >
           {loading ? 'Signing in...' : 'Sign In'}
         </Button>
-      </Box>
-
-      <Divider sx={{ mb: 3 }} />
-
-      <Box sx={{ 
-        p: 3, 
-        bgcolor: 'rgba(0, 102, 204, 0.05)', 
-        borderRadius: 2,
-        border: '1px solid #E8F4FD'
-      }}>
-        <Typography variant="subtitle2" gutterBottom sx={{ 
-          color: 'primary.main', 
-          fontWeight: 600,
-          mb: 2
-        }}>
-          🔑 Demo Accounts
-        </Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Typography variant="body2" sx={{ 
-            p: 1, 
-            bgcolor: 'white', 
-            borderRadius: 1,
-            border: '1px solid #E8F4FD'
-          }}>
-            <strong>Sub Contractor:</strong><br />
-            subcontractor1 / password123
-          </Typography>
-          <Typography variant="body2" sx={{ 
-            p: 1, 
-            bgcolor: 'white', 
-            borderRadius: 1,
-            border: '1px solid #E8F4FD'
-          }}>
-            <strong>Admin Install:</strong><br />
-            admininstall / admin123
-          </Typography>
-          <Typography variant="body2" sx={{ 
-            p: 1, 
-            bgcolor: 'white', 
-            borderRadius: 1,
-            border: '1px solid #E8F4FD'
-          }}>
-            <strong>Admin Credit:</strong><br />
-            admincredit / admin123
-          </Typography>
-        </Box>
       </Box>
     </Paper>
   )

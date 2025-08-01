@@ -25,7 +25,7 @@ export async function GET(
     
     return NextResponse.json({ success: true, data: transformedWorkOrder });
   } catch (error: any) {
-    console.error('WorkOrder API Error:', error);
+    // console.error('WorkOrder API Error:', error);
     return NextResponse.json(
       { 
         success: false, 
@@ -67,7 +67,7 @@ export async function PUT(
     
     return NextResponse.json({ success: true, data: transformedWorkOrder });
   } catch (error: any) {
-    console.error('WorkOrder API Error:', error);
+    // console.error('WorkOrder API Error:', error);
     return NextResponse.json(
       { 
         success: false, 
@@ -109,7 +109,7 @@ export async function PATCH(
     
     return NextResponse.json({ success: true, data: transformedWorkOrder });
   } catch (error: any) {
-    console.error('WorkOrder API Error:', error);
+    // console.error('WorkOrder API Error:', error);
     return NextResponse.json(
       { 
         success: false, 
@@ -140,7 +140,7 @@ export async function DELETE(
     await WorkOrderService.deleteWorkOrder(id);
     return new NextResponse(null, { status: 204 });
   } catch (error: any) {
-    console.error('WorkOrder API Error:', error);
+    // console.error('WorkOrder API Error:', error);
     return NextResponse.json(
       { 
         success: false, 

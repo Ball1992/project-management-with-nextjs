@@ -14,20 +14,40 @@ export class WorkOrderService {
       , Priority
       , Account.Id
       , Account.Name
+      , Subject
+      , Description
+      , DONumber__c
       , Account.ERP_Customer_ID__c
       , CreatedDate
       , Vendor_Name__r.Id, Vendor_Name__r.Name
       , Vendor_Name__r.ERP_Customer_ID__c
-      , (SELECT Id, AppointmentNumber, Status, SchedStartTime, SchedEndTime, ActualStartTime, ActualEndTime, ActualDuration FROM ServiceAppointments ORDER BY SchedStartTime ASC) 
+      , (SELECT Id, AppointmentNumber, Status, SchedStartTime, SchedEndTime, ActualStartTime, ActualEndTime, ActualDuration
+        FROM ServiceAppointments
+        WHERE SchedStartTime != null AND SchedEndTime != null
+        ORDER BY SchedStartTime ASC) 
       FROM WorkOrder
     `;
     
     if (where) {
-      query += ` WHERE  ${where}`;
+      query += ` WHERE Id IN (
+    SELECT ParentRecordId
+    FROM ServiceAppointment
+    WHERE SchedStartTime != null AND SchedEndTime != null
+) AND Category__c='Installation' AND  Vendor_Name__r.ERP_Customer_ID__c!=''  ${where}`;
+    }else{
+      query += ` WHERE Id IN (
+    SELECT ParentRecordId
+    FROM ServiceAppointment
+    WHERE SchedStartTime != null AND SchedEndTime != null
+) AND Category__c='Installation' AND  Vendor_Name__r.ERP_Customer_ID__c!=''  `;
     }
     
+
+
     query += ` ORDER BY ${orderBy} LIMIT ${limit} OFFSET ${offset}`;
-    
+      console.log('query123')
+     console.log(query)
+
     return await salesforceAPI.query<WorkOrder>(query);
   }
 
@@ -117,6 +137,8 @@ export class WorkOrderService {
       SELECT Id
       , WorkOrderNumber
       , Status
+      , Subject
+      , Description
       , Priority
       , Account.Id
       , Account.Name
@@ -124,7 +146,10 @@ export class WorkOrderService {
       , Vendor_Name__r.Id, Vendor_Name__r.Name
       , Vendor_Name__r.ERP_Customer_ID__c
       , CreatedDate
-      , (SELECT Id, AppointmentNumber, Status, SchedStartTime, SchedEndTime, ActualStartTime, ActualEndTime, ActualDuration FROM ServiceAppointments ORDER BY SchedStartTime ASC) 
+        , (SELECT Id, AppointmentNumber, Status, SchedStartTime, SchedEndTime, ActualStartTime, ActualEndTime, ActualDuration
+        FROM ServiceAppointments
+        WHERE SchedStartTime != null AND SchedEndTime != null
+        ORDER BY SchedStartTime ASC) 
       FROM WorkOrder
       ORDER BY LastModifiedDate DESC
       LIMIT 50
@@ -133,23 +158,45 @@ export class WorkOrderService {
     return await salesforceAPI.query<WorkOrder>(query);
   }
 
-  static async getWorkOrderMetrics(refKey:string): Promise<any> {
+  static async getWorkOrderMetrics(refKey: string, userRole?: string): Promise<any> {
+    // Build refKey filter condition - skip for admin roles
+    let refKeyCondition = '';
+    if (userRole !== 'admin_install' && userRole !== 'admin_credit') {
+      refKeyCondition = ` AND ( Vendor_Name__r.ERP_Customer_ID__c='${refKey}' or Vendor_Name__r.ERP_Customer_ID__c='000${refKey}' )`;
+    }
+
     const queries = [
-      // Tatal
-      `SELECT COUNT() FROM WorkOrder  WHERE Vendor_Name__r.ERP_Customer_ID__c='${refKey}'  `,
+      // Total
+      `SELECT COUNT() FROM WorkOrder WHERE Id IN (
+    SELECT ParentRecordId
+    FROM ServiceAppointment
+    WHERE SchedStartTime != null AND SchedEndTime != null
+) AND Category__c='Installation' AND (Status='Reception'  OR Status='Done (Operation)' OR  Status='Closed' ) AND  Vendor_Name__r.ERP_Customer_ID__c!=''  ${refKeyCondition}`,
       // Waiting Install
-      `SELECT COUNT() FROM WorkOrder WHERE Vendor_Name__r.ERP_Customer_ID__c='${refKey}' AND Status='Done (Operation)'  `,
+      `SELECT COUNT() FROM WorkOrder WHERE Id IN (
+    SELECT ParentRecordId
+    FROM ServiceAppointment
+    WHERE SchedStartTime != null AND SchedEndTime != null
+) AND Category__c='Installation' AND  Vendor_Name__r.ERP_Customer_ID__c!='' ${refKeyCondition} AND (Status='Reception')`,
       // Completed
-      `SELECT COUNT() FROM WorkOrder WHERE Vendor_Name__r.ERP_Customer_ID__c='${refKey}' AND  ( Status='Pending' OR Status='Reception'  ) `,
+      `SELECT COUNT() FROM WorkOrder WHERE Id IN (
+    SELECT ParentRecordId
+    FROM ServiceAppointment
+    WHERE SchedStartTime != null AND SchedEndTime != null
+) AND Category__c='Installation' AND  Vendor_Name__r.ERP_Customer_ID__c!='' ${refKeyCondition} AND Status='Done (Operation)'`,
       // Credit Review
-      `SELECT COUNT() FROM WorkOrder WHERE Vendor_Name__r.ERP_Customer_ID__c='${refKey}' AND Status='Closed'  `
+      `SELECT COUNT() FROM WorkOrder WHERE Id IN (
+    SELECT ParentRecordId
+    FROM ServiceAppointment
+    WHERE SchedStartTime != null AND SchedEndTime != null
+) AND Category__c='Installation' AND  Vendor_Name__r.ERP_Customer_ID__c!='' ${refKeyCondition} AND Status='Closed' AND IsCreditHandoverReceived__c = false  `
     ];
 
     const results = await Promise.all(
       queries.map(query => salesforceAPI.query(query))
     );
 
-    return  {
+    return {
       total: results[0].totalSize,
       totalWaitingInstall: results[1].totalSize,
       totalInstallationComplete: results[2].totalSize,

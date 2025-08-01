@@ -82,7 +82,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
         processedFiles.push(processedFile)
         setProcessingProgress(((i + 1) / newFiles.length) * 100)
       } catch (error) {
-        console.error('Error processing file:', file.name, error)
+        // console.error('Error processing file:', file.name, error)
         // Still add the file even if processing fails
         processedFiles.push(processedFile)
       }
@@ -128,7 +128,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
       // Add to existing files
       onFilesChange([...files, ...processedFiles])
     } catch (error) {
-      console.error('Error processing files:', error)
+      // console.error('Error processing files:', error)
       setError('Error processing files. Please try again.')
     } finally {
       setIsProcessing(false)

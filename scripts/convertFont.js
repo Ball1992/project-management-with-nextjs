@@ -27,7 +27,7 @@ export const THSarabunNewBold = '${boldBase64String}';
     fontModule
   );
   
-  console.log('Font conversion completed!');
+  // console.log('Font conversion completed!');
 }
 
 convertFontToBase64();

@@ -28,7 +28,10 @@ export interface WorkOrder extends SalesforceRecord {
   Status: string;
   Priority: string;
   CreatedDate: string;
-  
+  Subject: string;
+  Description: string;
+  DONumber__c: string;
+
   // Account lookup fields
   Account: {
     Id: string;
@@ -44,9 +47,13 @@ export interface WorkOrder extends SalesforceRecord {
   };
   
   // Service Appointments (related list)
-  ServiceAppointments: ServiceAppointment[];
+  ServiceAppointments: ServiceAppointmentResult;
 }
-
+export interface ServiceAppointmentResult {
+  totalSize: number;
+  done: boolean;
+  records: ServiceAppointment[];
+}
 export interface ServiceAppointment {
   Id: string;
   AppointmentNumber: string;
@@ -100,4 +107,10 @@ export interface QueryParams {
   offset?: number;
   orderBy?: string;
   where?: string;
+  id?: string;
+  jwtToken?: string;
+}
+export interface DODataParams {
+  doNo: string;
+  jwtToken: string;
 }

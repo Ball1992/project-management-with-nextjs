@@ -16,7 +16,7 @@ export const loadThaiFont = async (): Promise<{ normal: string; bold: string }> 
       bold: boldBase64
     };
   } catch (error) {
-    console.error('Error loading Thai fonts:', error);
+    // console.error('Error loading Thai fonts:', error);
     throw error;
   }
 };

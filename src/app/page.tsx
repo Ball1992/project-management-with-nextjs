@@ -45,6 +45,7 @@ import { salesforceAPI } from '../lib/salesforce-server'
 import { apiClient } from '../utils/api-client'
 import { WorkOrderFilters, IWorkOrderTableFilters } from '@/components/WorkOrderFilters'
 import { WorkOrderSearch, IWorkOrderSearchFilters } from '@/components/WorkOrderSearch'
+import { formatDateForTable } from '@/utils/dateFormatter'
 
 // Custom hook to replace useSetState and fix infinite loop
 function useStableState<T>(initialState: T) {
@@ -109,21 +110,32 @@ export default function MinimalHomePage() {
       
       setLoading(true);
 
-      let whereClause = `Vendor_Name__r.ERP_Customer_ID__c='${currentUser.refKey}'`;
+      let whereClause = '';
+      
+      // Only apply refKey filtering for non-admin roles
+      if (currentUser.role !== 'admin_install' && currentUser.role !== 'admin_credit') {
+        whereClause = ` AND ( Vendor_Name__r.ERP_Customer_ID__c='${currentUser.refKey}'   or Vendor_Name__r.ERP_Customer_ID__c='000${currentUser.refKey}'  ) `;
+      }
       
       if (searchName) {
-        whereClause += ` AND (WorkOrderNumber LIKE '%${searchName}%' OR Account.Name LIKE '%${searchName}%' OR Land_No__c LIKE '%${searchName}%')`;
+        whereClause += ` AND (WorkOrderNumber LIKE '%${searchName}%'  )`;
       }
       
       // Handle status filter with correct Salesforce status values
       if (statusFilter) {
         if (statusFilter.includes(',')) {
-          // Handle multiple statuses (like 'Pending,Reception')
+          // Handle multiple statuses (like 'Reception')
           const statuses = statusFilter.split(',').map(s => `'${s.trim()}'`).join(',');
+          // console.log(statuses)
           whereClause += ` AND Status IN (${statuses})`;
         } else {
           // Single status
-          whereClause += ` AND Status = '${statusFilter}'`;
+          if(statusFilter!=='Closed'){
+             whereClause += ` AND Status = '${statusFilter}'`;
+          }else{
+             whereClause += ` AND Status = '${statusFilter}' AND  IsCreditHandoverReceived__c = false  `;
+          }
+          
         }
       }
 
@@ -134,23 +146,27 @@ export default function MinimalHomePage() {
         where: whereClause,
       };
 
-      console.log(`Fetching page ${page + 1}, limit: ${pageSize}, offset: ${page * pageSize}`);
-      console.log(`Where clause: ${whereClause}`);
+      // console.log(`Fetching page ${page + 1}, limit: ${pageSize}, offset: ${page * pageSize}`);
+      // console.log(`Where clause: ${whereClause}`);
 
       const response = await apiClient.get<SalesforceQueryResponse<WorkOrderCustom>>('/workorders', queryParams);
+      // console.log(response);
       if (response.success && response.data) {
         setWorkOrders(response.data.records);
-        console.log(`Received ${response.data.records.length} records`);
+        // console.log(`Received ${response.data.records.length} records`);
       }
 
-      const responseWorkOrderSummary = await apiClient.get<WorkOrderSummary>('/workorders/metrics', { refKey: currentUser.refKey });
+      const responseWorkOrderSummary = await apiClient.get<WorkOrderSummary>('/workorders/metrics', { 
+        refKey: currentUser.refKey,
+        userRole: currentUser.role 
+      });
       if (responseWorkOrderSummary.success && responseWorkOrderSummary.data) {
         setWorkOrderSummary(responseWorkOrderSummary.data);
         
         // Set rowCount based on current filter with correct mapping
         if (!statusFilter) {
           setRowCount(responseWorkOrderSummary.data.total);
-        } else if (statusFilter === 'Pending,Reception') {
+        } else if (statusFilter === 'Reception') {
           setRowCount(responseWorkOrderSummary.data.totalWaitingInstall); // Waiting Install card count
         } else if (statusFilter === 'Done (Operation)') {
           setRowCount(responseWorkOrderSummary.data.totalInstallationComplete); // Installation Completed card count
@@ -160,14 +176,14 @@ export default function MinimalHomePage() {
           setRowCount(responseWorkOrderSummary.data.total);
         }
         
-        console.log(`Total records from metrics: ${responseWorkOrderSummary.data.total}`);
+        // console.log(`Total records from metrics: ${responseWorkOrderSummary.data.total}`);
       } else {
         setRowCount(response.data?.totalSize || 0);
-        console.log(`Fallback total: ${response.data?.totalSize || 0}`);
+        // console.log(`Fallback total: ${response.data?.totalSize || 0}`);
       }
         
     } catch (error) {
-      console.error('Error fetching work orders:', error)
+      // console.error('Error fetching work orders:', error)
       setWorkOrders([]);
       setWorkOrderSummary({
         total: 0,
@@ -176,7 +192,7 @@ export default function MinimalHomePage() {
         totalWaitingCreditAdmin: 0
       });
       setRowCount(0);
-      console.log('API failed, showing empty state');
+      // console.log('API failed, showing empty state');
     } finally {
       setLoading(false);
     }
@@ -188,10 +204,10 @@ export default function MinimalHomePage() {
     
     switch (filterType) {
       case 'total':
-        statusFilter = ''; // Show all
+        statusFilter = 'Reception,Done (Operation),Closed'; // Show all
         break;
       case 'waiting_install':
-        statusFilter = 'Pending,Reception'; // Waiting Install shows Pending,Reception
+        statusFilter = 'Reception'; // Waiting Install shows Reception
         break;
       case 'installation_completed':
         statusFilter = 'Done (Operation)'; // Installation Completed shows Done (Operation)
@@ -205,12 +221,12 @@ export default function MinimalHomePage() {
     
     tableFilters.setState({ status: statusFilter });
     setPaginationModel(prev => ({ ...prev, page: 0 }));
-    console.log(`Summary card clicked: ${filterType}, filter set to: ${statusFilter}`);
+    // console.log(`Summary card clicked: ${filterType}, filter set to: ${statusFilter}`);
   }, [tableFilters])
 
   // Event handlers
   const handlePaginationModelChange = useCallback((newModel: typeof paginationModel) => {
-    console.log('Pagination changed:', newModel)
+    // console.log('Pagination changed:', newModel)
     setPaginationModel(newModel)
   }, [])
 
@@ -263,25 +279,28 @@ export default function MinimalHomePage() {
       switch (user.role) {
         case 'sub_contractor':
           return 'waiting_install'; // Waiting Install card
-        case 'install_admin':
+        case 'admin_install':
           return 'installation_completed'; // Installation Completed card
-        case 'credit_admin':
+        case 'admin_credit':
           return 'credit_review'; // Credit Review card
+        case 'admin':
+        case 'manager':
+          return 'total'; // Total card for admin/manager roles
         default:
-          return '';
+          return 'total'; // Default to total card for unknown roles
       }
     };
 
     const defaultCard = getDefaultCard();
     
-    const summaryData = [
+    const allSummaryData = [
       { 
         title: 'Total', 
         value: workOrderSummary.total, 
         icon: <AssignmentIcon />,
         color: '#64748b',
         filterType: 'total',
-        isActive: tableFilters.state.status === '',
+        isActive: tableFilters.state.status === 'Reception,Done (Operation),Closed',
         isDefault: defaultCard === 'total'
       },
       { 
@@ -290,7 +309,7 @@ export default function MinimalHomePage() {
         icon: <ScheduleIcon />,
         color: '#f59e0b',
         filterType: 'waiting_install',
-        isActive: tableFilters.state.status === 'Pending,Reception',
+        isActive: tableFilters.state.status === 'Reception',
         isDefault: defaultCard === 'waiting_install'
       },
       { 
@@ -312,6 +331,11 @@ export default function MinimalHomePage() {
         isDefault: defaultCard === 'credit_review'
       }
     ];
+
+    // Filter out Credit Review card for sub_contractor users
+    const summaryData = user?.role === 'sub_contractor' 
+      ? allSummaryData.filter(item => item.filterType !== 'credit_review')
+      : allSummaryData;
 
     return (
       <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -465,7 +489,7 @@ export default function MinimalHomePage() {
       headerName: 'Created',
       width: 110,
       flex: 0,
-      valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : 'N/A',
+      valueFormatter: (params) => formatDateForTable(params.value),
       renderCell: (params) => (
         <Typography 
           variant="caption" 
@@ -479,21 +503,63 @@ export default function MinimalHomePage() {
         </Typography>
       )
     },
-    { 
-      field: 'landNo', 
-      headerName: 'Land No.', 
-      width: 100,
+    {
+      field: 'actualStart',
+      headerName: 'Actual Start',
+      width: 120,
       flex: 0,
+      valueFormatter: (params) => formatDateForTable(params.value),
       renderCell: (params) => (
         <Typography 
           variant="caption" 
           sx={{ 
-            color: '#9ca3af',
+            color: params.value ? '#059669' : '#9ca3af',
             fontSize: '0.8rem',
-            fontFamily: 'monospace'
+            fontWeight: params.value ? 600 : 400
           }}
         >
-          {params.value || 'N/A'}
+          {params.formattedValue}
+        </Typography>
+      )
+    },
+    {
+      field: 'actualFinished',
+      headerName: 'Actual Finished',
+      width: 130,
+      flex: 0,
+      valueFormatter: (params) => formatDateForTable(params.value),
+      renderCell: (params) => (
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            color: params.value ? '#059669' : '#9ca3af',
+            fontSize: '0.8rem',
+            fontWeight: params.value ? 600 : 400
+          }}
+        >
+          {params.formattedValue}
+        </Typography>
+      )
+    },
+    { 
+      field: 'subject', 
+      headerName: 'Subject', 
+      width: 200,
+      flex: 1,
+      minWidth: 150,
+      renderCell: (params) => (
+        <Typography 
+          variant="body2" 
+          sx={{ 
+            color: '#374151',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {params.value || 'No subject'}
         </Typography>
       )
     },
@@ -597,12 +663,12 @@ export default function MinimalHomePage() {
       let defaultStatus = '';
       switch (currentUser.role) {
         case 'sub_contractor':
-          defaultStatus = 'Pending,Reception'; // waiting_install -> Installation Completed
+          defaultStatus = 'Reception'; // waiting_install -> Installation Completed
           break;
-        case 'install_admin':
+        case 'admin_install':
           defaultStatus = 'Done (Operation)'; // installation_completed -> Waiting Install
           break;
-        case 'credit_admin':
+        case 'admin_credit':
           defaultStatus = 'Closed'; // credit_review -> Credit Review
           break;
         default:
@@ -648,49 +714,207 @@ export default function MinimalHomePage() {
       minHeight: '100vh',
       bgcolor: '#fafafa'
     }}>
-      {/* App Bar */}
-      <AppBar 
-        position="static" 
-        elevation={0} 
-        sx={{ 
-          bgcolor: '#ffffff',
-          borderBottom: '1px solid #f1f5f9',
-          color: '#1e293b'
+
+
+// แทนที่ส่วน AppBar ใน src/app/page.tsx เดิม
+
+{/* Minimal Daikin Header - โทนฟ้า Daikin กับตัวอักษรขาว */}
+<AppBar 
+  position="fixed" 
+  elevation={0} 
+  sx={{ 
+    bgcolor: '#0066CC',
+    background: 'linear-gradient(135deg, #0066CC 0%, #00A0E6 100%)',
+    color: 'white',
+    backdropFilter: 'blur(8px)',
+    zIndex: 1100
+  }}
+>
+  <Toolbar 
+    sx={{ 
+      minHeight: '56px !important',
+      px: { xs: 2, sm: 3 },
+      py: 0
+    }}
+  >
+    {/* Left Side - Minimal Daikin Logo */}
+    <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+      {/* Simple Daikin Logo */}
+      <Box
+        sx={{
+          width: 32,
+          height: 32,
+          borderRadius: '6px',
+          background: 'linear-gradient(135deg, #0066CC 0%, #00A0E6 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          mr: 2,
+          boxShadow: '0 2px 8px rgba(0, 102, 204, 0.2)'
         }}
       >
-        <Toolbar sx={{ py: 1 }}>
+        <Typography 
+          sx={{ 
+            fontWeight: 700,
+            color: 'white',
+            fontSize: '14px'
+          }}
+        >
+          D
+        </Typography>
+      </Box>
+      
+      {/* DAIKIN Text - สีขาวบนโทนฟ้า */}
+      <Typography 
+        variant="h6" 
+        sx={{ 
+          fontWeight: 700,
+          color: 'white',
+          fontSize: '18px',
+          letterSpacing: '0.5px'
+        }}
+      >
+        DAIKIN
+      </Typography>
+
+      {/* System Name - สีขาวอ่อน */}
+      <Typography 
+        variant="body2" 
+        sx={{ 
+          fontWeight: 400,
+          color: 'rgba(255, 255, 255, 0.9)',
+          fontSize: '13px',
+          ml: 2,
+          display: { xs: 'none', md: 'block' }
+        }}
+      >
+        WorkOrder Management
+      </Typography>
+    </Box>
+    
+    {/* Right Side - Minimal User Info */}
+    <Stack direction="row" spacing={1.5} alignItems="center">
+      {/* User Info - Clean */}
+      <Box sx={{ 
+        display: { xs: 'none', sm: 'flex' }, 
+        alignItems: 'center', 
+        gap: 1.5
+      }}>
+        <Box sx={{ textAlign: 'right' }}>
           <Typography 
-            variant="h6" 
+            variant="body2" 
             sx={{ 
-              fontWeight: 700,
-              flexGrow: 1,
-              color: '#1e293b'
+              fontWeight: 600,
+              color: 'white',
+              lineHeight: 1.2,
+              fontSize: '13px'
             }}
           >
-            DAIKIN
+            {user?.username}
           </Typography>
-          
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Typography variant="body2" color="text.secondary">
-              {user?.username}
-            </Typography>
-            <Button 
-              color="inherit" 
-              onClick={handleLogout} 
-              startIcon={<LogoutIcon />}
-              sx={{
-                color: '#64748b',
-                textTransform: 'none',
-                '&:hover': {
-                  bgcolor: '#f8fafc'
-                }
-              }}
-            >
-              Logout
-            </Button>
-          </Stack>
-        </Toolbar>
-      </AppBar>
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              color: 'rgba(255, 255, 255, 0.8)',
+              lineHeight: 1.2,
+              fontSize: '11px'
+            }}
+          >
+            {user?.role}
+          </Typography>
+        </Box>
+        
+        {/* User Avatar - Minimal */}
+        <Box
+          sx={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: 'rgba(255, 255, 255, 0.2)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <Typography 
+            sx={{ 
+              color: 'white',
+              fontSize: '12px',
+              fontWeight: 700
+            }}
+          >
+            {user?.username?.charAt(0)}
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Mobile User Avatar */}
+      <Box
+        sx={{
+          width: 28,
+          height: 28,
+          borderRadius: '50%',
+          background: 'rgba(255, 255, 255, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          display: { xs: 'flex', sm: 'none' },
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        <Typography 
+          sx={{ 
+            color: '#f1f5f9',
+            fontSize: '12px',
+            fontWeight: 600
+          }}
+        >
+          {user?.username?.charAt(0)}
+        </Typography>
+      </Box>
+
+      {/* Logout Button - Minimal */}
+      <Button 
+        color="inherit" 
+        onClick={handleLogout} 
+        startIcon={<LogoutIcon />}
+        sx={{
+          color: 'white',
+          textTransform: 'none',
+          fontWeight: 500,
+          fontSize: '13px',
+          px: { xs: 1.5, sm: 2 },
+          py: 0.75,
+          borderRadius: 2,
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            bgcolor: 'rgba(255, 255, 255, 0.1)',
+            borderColor: 'rgba(255, 255, 255, 0.3)',
+            color: 'white'
+          },
+          '& .MuiButton-startIcon': {
+            display: { xs: 'none', sm: 'flex' },
+            margin: 0,
+            mr: 0.75
+          }
+        }}
+      >
+        <Box component="span" sx={{ display: { xs: 'none', sm: 'block' } }}>
+          Logout
+        </Box>
+        <LogoutIcon sx={{ 
+          display: { xs: 'block', sm: 'none' },
+          fontSize: '18px'
+        }} />
+      </Button>
+    </Stack>
+  </Toolbar>
+</AppBar>
+
+{/* ต้องเพิ่ม Toolbar ว่างเพื่อ offset content เนื่องจากใช้ position="fixed" */}
+<Toolbar sx={{ minHeight: '56px' }} />
+
 
       <Container maxWidth="xl" sx={{ py: 4 }}>
         {/* Header */}
@@ -752,16 +976,7 @@ export default function MinimalHomePage() {
         >
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Box>
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  fontWeight: 600, 
-                  mb: 0.5,
-                  color: '#1e293b'
-                }}
-              >
-                Recent Orders
-              </Typography>
+              
               <Typography variant="body2" color="text.secondary">
                 {workOrders && workOrders.length > 0 
                   ? `Showing ${workOrders.length} of ${rowCount} orders`

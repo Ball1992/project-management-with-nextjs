@@ -19,11 +19,11 @@ class ApiClient {
   private setupInterceptors(): void {
     this.client.interceptors.request.use(
       (config) => {
-        console.log(`[API Client] ${config.method?.toUpperCase()} ${config.url}`);
+        // console.log(`[API Client] ${config.method?.toUpperCase()} ${config.url}`);
         return config;
       },
       (error) => {
-        console.error('[API Client] Request error:', error);
+        // console.error('[API Client] Request error:', error);
         return Promise.reject(error);
       }
     );
@@ -33,7 +33,7 @@ class ApiClient {
         return response;
       },
       (error) => {
-        console.error('[API Client] Response error:', error.response?.data || error.message);
+        // console.error('[API Client] Response error:', error.response?.data || error.message);
         return Promise.reject(error);
       }
     );

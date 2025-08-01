@@ -1,7 +1,9 @@
 export interface WorkOrderModel {
-  id: string
-  model: string
-  serialNo: string
+  doNum: string
+  deliveryDate: string
+  material: string
+  landNo: string
+  sernr: string
 }
 
 export interface WorkOrderAttachment {
@@ -16,10 +18,12 @@ export interface WorkOrderAttachment {
 
 export interface WorkOrderCustom {
   id: string
+  appointmentId: string
   woNo: string
   sub: string // vendor
   account: string // customer
   createdDate: Date
+  subject: string
   landNo: string
   doNo: string // Delivery Order Number
   doDate: Date
@@ -35,6 +39,7 @@ export interface WorkOrderCustom {
   testRunReportAttachments: WorkOrderAttachment[]
   othersAttachments: WorkOrderAttachment[]
   remark: string
+  description: string
   status: 'waiting_sub_contractor' | 'waiting_install_admin' | 'waiting_credit_admin'
   installStaff?: string // status confirm
   creditStaff?: string // status document

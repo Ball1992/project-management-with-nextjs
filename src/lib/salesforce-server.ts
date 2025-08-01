@@ -40,11 +40,11 @@ export class SalesforceServerAPI {
         if (this.accessToken) {
           config.headers.Authorization = `Bearer ${this.accessToken}`;
         }
-        console.log(`[SF API] ${config.method?.toUpperCase()} ${config.url}`);
+        // console.log(`[SF API] ${config.method?.toUpperCase()} ${config.url}`);
         return config;
       },
       (error) => {
-        console.error('[SF API] Request error:', error);
+        // console.error('[SF API] Request error:', error);
         return Promise.reject(error);
       }
     );
@@ -65,12 +65,12 @@ export class SalesforceServerAPI {
             originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
             return this.axiosInstance(originalRequest);
           } catch (authError) {
-            console.error('[SF API] Re-authentication failed:', authError);
+            // console.error('[SF API] Re-authentication failed:', authError);
             return Promise.reject(authError);
           }
         }
 
-        console.error('[SF API] Response error:', error.response?.data || error.message);
+        // console.error('[SF API] Response error:', error.response?.data || error.message);
         return Promise.reject(error);
       }
     );
@@ -100,10 +100,10 @@ export class SalesforceServerAPI {
       this.accessToken = response.data.access_token;
       this.instanceUrl = response.data.instance_url;
 
-      console.log('[SF API] Authentication successful');
+      // console.log('[SF API] Authentication successful');
       return response.data;
     } catch (error: any) {
-      console.error('[SF API] Authentication error:', error.response?.data || error.message);
+      // console.error('[SF API] Authentication error:', error.response?.data || error.message);
       throw new Error(`Authentication failed: ${error.response?.status || error.message}`);
     }
   }
@@ -118,7 +118,7 @@ export class SalesforceServerAPI {
     await this.ensureAuthenticated();
     const encodedQuery = encodeURIComponent(soql);
     const url = `${this.instanceUrl}/services/data/${this.apiVersion}/query?q=${encodedQuery}`;
-    console.log(url)
+    // console.log(url)
     const response = await this.axiosInstance.get<SalesforceQueryResponse<T>>(url);
     return response.data;
   }

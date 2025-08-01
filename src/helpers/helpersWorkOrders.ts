@@ -6,36 +6,34 @@ import { WorkOrderCustom, WorkOrderModel, WorkOrderAttachment } from '@/types/wo
  */
 export function transformWorkOrderToCustom(salesforceWorkOrder: WorkOrder): WorkOrderCustom {
   // Map Salesforce status to custom status
+   
   const mapStatus = (sfStatus: string): WorkOrderCustom['status'] => {
+    // console.log('dddd')
+    // console.log(sfStatus?.toLowerCase())
     switch (sfStatus?.toLowerCase()) {
       case 'new':
       case 'open':
         return 'waiting_sub_contractor';
       case 'in progress':
-      case 'working':
+      case 'done (operation)':
         return 'waiting_install_admin';
       case 'completed':
       case 'closed':
         return 'waiting_credit_admin';
       default:
+      
         return 'waiting_sub_contractor';
     }
   };
 
   // Create models array from Salesforce data
-  const models: WorkOrderModel[] = [
-    {
-      id: salesforceWorkOrder.Id,
-      model: salesforceWorkOrder.WorkOrderNumber || 'N/A',
-      serialNo: salesforceWorkOrder.WorkOrderNumber || 'N/A'
-    }
-  ];
+  const models: WorkOrderModel[] = [];
 
   // Create empty attachment arrays (these would be populated from SF attachments if available)
   const emptyAttachments: WorkOrderAttachment[] = [];
 
   // Get dates from ServiceAppointments if available
-  const firstAppointment = salesforceWorkOrder.ServiceAppointments?.[0];
+  const firstAppointment = salesforceWorkOrder.ServiceAppointments.records?.[0];
   const planStart = firstAppointment?.SchedStartTime ? new Date(firstAppointment.SchedStartTime) : new Date();
   const planFinished = firstAppointment?.SchedEndTime ? new Date(firstAppointment.SchedEndTime) : new Date();
   const actualStart = firstAppointment?.ActualStartTime ? new Date(firstAppointment.ActualStartTime) : undefined;
@@ -43,12 +41,15 @@ export function transformWorkOrderToCustom(salesforceWorkOrder: WorkOrder): Work
 
   const workOrderCustom: WorkOrderCustom = {
     id: salesforceWorkOrder.Id,
+    appointmentId:firstAppointment.Id,
     woNo: salesforceWorkOrder.WorkOrderNumber,
     sub: salesforceWorkOrder.Vendor_Name__r?.ERP_Customer_ID__c || 'N/A',
     account: salesforceWorkOrder.Account?.Name || 'N/A',
     createdDate: new Date(salesforceWorkOrder.CreatedDate),
-    landNo: salesforceWorkOrder.Id.slice(-6), // Generate from ID as placeholder
-    doNo: `DO-${salesforceWorkOrder.WorkOrderNumber}`,
+    subject:salesforceWorkOrder.Subject || 'N/A',
+    description:salesforceWorkOrder.Description || 'N/A',
+    landNo: 'N/A', // Generate from ID as placeholder
+    doNo: salesforceWorkOrder.DONumber__c || 'N/A',
     doDate: new Date(salesforceWorkOrder.CreatedDate),
     planStart,
     planFinished,
@@ -84,6 +85,7 @@ export function transformWorkOrdersToCustom(salesforceWorkOrders: WorkOrder[]): 
 export function transformCustomToWorkOrder(customWorkOrder: WorkOrderCustom): Partial<WorkOrder> {
   // Map custom status back to Salesforce status
   const mapStatusToSF = (customStatus: WorkOrderCustom['status']): string => {
+     // console.log(customStatus)
     switch (customStatus) {
       case 'waiting_sub_contractor':
         return 'New';
@@ -129,6 +131,11 @@ export function filterWorkOrdersForUser(
   userRole: string, 
   refKey?: string
 ): WorkOrderCustom[] {
+  // Skip refKey filtering for admin roles
+  if (userRole === 'admin_install' || userRole === 'admin_credit') {
+    return workOrders;
+  }
+  
   if (userRole === 'sub_contractor' && refKey) {
     return workOrders.filter(wo => wo.refKey === refKey);
   }
